@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QueryMind AI</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="logo">🧠 QueryMind</span>
+      <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+    </div>
+
+    <!-- Connection Panel -->
+    <div class="sidebar-section">
+      <h3>Connect Database</h3>
+      <div class="db-tabs">
+        <button class="tab-btn active" onclick="switchTab('mysql')">MySQL</button>
+        <button class="tab-btn" onclick="switchTab('sqlite')">SQLite</button>
+      </div>
+
+      <!-- MySQL Form -->
+      <div id="mysql-form" class="db-form">
+        <input type="text" id="host" placeholder="Host" value="localhost"/>
+        <input type="text" id="port" placeholder="Port" value="3306"/>
+        <input type="text" id="username" placeholder="Username" value="root"/>
+        <input type="password" id="password" placeholder="Password"/>
+        <input type="text" id="database" placeholder="Database name"/>
+        <button class="connect-btn" onclick="connectMySQL()">Connect</button>
+      </div>
+
+      <!-- SQLite Form -->
+      <div id="sqlite-form" class="db-form hidden">
+        <input type="text" id="sqlite-path" placeholder="C:\path\to\file.db"/>
+        <button class="connect-btn" onclick="connectSQLite()">Connect</button>
+      </div>
+
+      <div id="connection-status" class="status-badge disconnected">● Disconnected</div>
+    </div>
+
+    <!-- History Panel -->
+    <div class="sidebar-section">
+      <div class="history-header">
+        <h3>Query History</h3>
+        <button class="clear-btn" onclick="clearHistory()">Clear</button>
+      </div>
+      <div id="history-list" class="history-list">
+        <p class="empty-msg">No queries yet.</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CHAT AREA -->
+  <main class="main">
+    <div class="chat-header">
+      <h1>QueryMind <span>AI</span></h1>
+      <p>Ask questions about your database in plain English</p>
+    </div>
+
+    <div class="chat-window" id="chat-window">
+      <div class="welcome-msg">
+        <div class="welcome-icon">🧠</div>
+        <h2>Connect your database and start asking questions</h2>
+        <p>Example: "Show top 5 customers by revenue" or "What was the budget of Product 12?"</p>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="question-input"
+          placeholder="Ask a question about your data..."
+          rows="1"
+          onkeydown="handleKey(event)"
+        ></textarea>
+        <button class="send-btn" id="send-btn" onclick="askQuestion()">
+          <span id="send-icon">➤</span>
+        </button>
+      </div>
+      <p class="hint">Press Enter to send · Shift+Enter for new line</p>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

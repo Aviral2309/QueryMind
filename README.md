@@ -22,7 +22,7 @@
 |---|---|
 | Frontend | Plain HTML, CSS, JavaScript |
 | Backend | Flask, Flask-CORS |
-| LLM | Gemini 2.0 Flash (via LangChain) |
+| LLM | Gemini 2.5 Flash (via LangChain) |
 | Database | MySQL / SQLite (via SQLAlchemy) |
 | Validation | sqlparse |
 
@@ -42,9 +42,10 @@ querymind/
 │   ├── requirements.txt
 │   └── .env                # GEMINI_API_KEY
 └── frontend/
-    ├── index.html
-    ├── style.css
-    └── app.js
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+└── README.md
 ```
 
 ---
@@ -120,5 +121,6 @@ List all products in the Electronics category
 
 <br/>
 
+## Author
 **Aviral Mittal**
-GenAI · Agentic AI · ML · Data Science · Backend
+- GenAI · Agentic AI · ML · Data Science · Backend
