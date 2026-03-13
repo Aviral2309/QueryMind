@@ -123,4 +123,4 @@ List all products in the Electronics category
 
 ## Author
 **Aviral Mittal**
-- GenAI · Agentic AI · ML · Data Science · Backend
+GenAI · Agentic AI · ML · Data Science · Backend
