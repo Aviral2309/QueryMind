@@ -8,3 +8,7 @@ sqlparse
 python-dotenv
 google-generativeai
 langchain-ollama
+flask-jwt-extended
+bcrypt
+authlib
+requests

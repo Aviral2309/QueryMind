@@ -1,94 +1,104 @@
-const API = "http://localhost:5000/api";
+// API base (defined in auth.js too but kept here for clarity)
+// const API = "http://localhost:5000/api";
 
-// ─────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────
 let isConnected = false;
-let isLoading = false;
+let isLoading   = false;
 
 // ─────────────────────────────────────────────
-// Sidebar toggle
+// DB tab switching
 // ─────────────────────────────────────────────
-function toggleSidebar() {
-  const sidebar = document.getElementById("sidebar");
-  sidebar.style.width = sidebar.style.width === "0px" ? "300px" : "0px";
+function switchDbTab(type) {
+  document.querySelectorAll(".db-tab-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.type === type)
+  );
+  document.getElementById("mysql-form").style.display  = type === "mysql"  ? "flex" : "none";
+  document.getElementById("sqlite-form").style.display = type === "sqlite" ? "flex" : "none";
 }
 
 // ─────────────────────────────────────────────
-// Tab switching (MySQL / SQLite)
+// Connect MySQL
 // ─────────────────────────────────────────────
-function switchTab(type) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-  event.target.classList.add("active");
-  document.getElementById("mysql-form").classList.toggle("hidden", type !== "mysql");
-  document.getElementById("sqlite-form").classList.toggle("hidden", type !== "sqlite");
-}
-
-// ─────────────────────────────────────────────
-// Connection
-// ─────────────────────────────────────────────
-function setStatus(state, text) {
-  const el = document.getElementById("connection-status");
-  el.className = `status-badge ${state}`;
-  el.textContent = text;
-}
-
 async function connectMySQL() {
-  setStatus("connecting", "⟳ Connecting...");
+  const btn = document.getElementById("mysql-connect-btn");
+  btn.textContent = "Connecting...";
+  btn.disabled    = true;
+  setConnStatus("connecting", "Connecting...");
+
   try {
-    const res = await fetch(`${API}/connect/mysql`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res  = await fetch(`${API}/connect/mysql`, {
+      method:  "POST",
+      headers: authHeaders(),
       body: JSON.stringify({
-        host: document.getElementById("host").value,
-        port: document.getElementById("port").value,
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value,
-        database: document.getElementById("database").value
+        host:     document.getElementById("db-host").value,
+        port:     document.getElementById("db-port").value,
+        username: document.getElementById("db-user").value,
+        password: document.getElementById("db-pass").value,
+        database: document.getElementById("db-name").value
       })
     });
-
     const data = await res.json();
+
     if (res.ok) {
       isConnected = true;
-      setStatus("connected", `● Connected · ${data.database}`);
-      clearWelcome();
-      appendSystemMsg(`✅ Connected to MySQL database: <strong>${data.database}</strong>`);
+      setConnStatus("online", `${data.database}`);
+      pushSystemMsg(`✓ Connected to <strong>${data.database}</strong>`, "success");
       loadHistory();
     } else {
-      setStatus("disconnected", "● Disconnected");
-      appendSystemMsg(`❌ Connection failed: ${data.error}`, true);
+      setConnStatus("offline", "Failed");
+      pushSystemMsg(`✗ ${data.error}`, "error");
     }
   } catch (e) {
-    setStatus("disconnected", "● Disconnected");
-    appendSystemMsg(`❌ Could not reach backend: ${e.message}`, true);
+    setConnStatus("offline", "Error");
+    pushSystemMsg(`✗ ${e.message}`, "error");
   }
+
+  btn.textContent = "Connect";
+  btn.disabled    = false;
 }
 
+// ─────────────────────────────────────────────
+// Connect SQLite
+// ─────────────────────────────────────────────
 async function connectSQLite() {
-  setStatus("connecting", "⟳ Connecting...");
+  const btn = document.getElementById("sqlite-connect-btn");
+  btn.textContent = "Connecting...";
+  btn.disabled    = true;
+  setConnStatus("connecting", "Connecting...");
+
   try {
-    const res = await fetch(`${API}/connect/sqlite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res  = await fetch(`${API}/connect/sqlite`, {
+      method:  "POST",
+      headers: authHeaders(),
       body: JSON.stringify({ filepath: document.getElementById("sqlite-path").value })
     });
-
     const data = await res.json();
+
     if (res.ok) {
       isConnected = true;
-      setStatus("connected", `● Connected · SQLite`);
-      clearWelcome();
-      appendSystemMsg(`✅ Connected to SQLite: <strong>${data.filepath}</strong>`);
+      setConnStatus("online", "SQLite");
+      pushSystemMsg(`✓ Connected to SQLite database`, "success");
       loadHistory();
     } else {
-      setStatus("disconnected", "● Disconnected");
-      appendSystemMsg(`❌ Connection failed: ${data.error}`, true);
+      setConnStatus("offline", "Failed");
+      pushSystemMsg(`✗ ${data.error}`, "error");
     }
   } catch (e) {
-    setStatus("disconnected", "● Disconnected");
-    appendSystemMsg(`❌ Could not reach backend: ${e.message}`, true);
+    setConnStatus("offline", "Error");
+    pushSystemMsg(`✗ ${e.message}`, "error");
   }
+
+  btn.textContent = "Connect";
+  btn.disabled    = false;
+}
+
+// ─────────────────────────────────────────────
+// Connection status indicator
+// ─────────────────────────────────────────────
+function setConnStatus(state, text) {
+  const dot  = document.getElementById("conn-status-dot");
+  const label = document.getElementById("conn-status-text");
+  dot.className       = `status-dot ${state}`;
+  label.textContent   = text;
 }
 
 // ─────────────────────────────────────────────
@@ -97,107 +107,102 @@ async function connectSQLite() {
 function handleKey(e) {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    askQuestion();
+    sendQuestion();
   }
 }
 
-async function askQuestion() {
+async function sendQuestion() {
   if (isLoading) return;
-  const input = document.getElementById("question-input");
+  const input    = document.getElementById("chat-input");
   const question = input.value.trim();
   if (!question) return;
 
   if (!isConnected) {
-    appendSystemMsg("⚠️ Please connect to a database first.", true);
+    pushSystemMsg("⚠ Connect to a database first.", "warning");
     return;
   }
 
-  input.value = "";
+  input.value       = "";
   input.style.height = "auto";
-  isLoading = true;
+  isLoading         = true;
   document.getElementById("send-btn").disabled = true;
 
-  // Show user message
-  appendUserMsg(question);
-
-  // Show loading indicator
-  const loaderId = appendLoader();
+  pushUserBubble(question);
+  const loaderId = pushLoader();
 
   try {
-    const res = await fetch(`${API}/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res  = await fetch(`${API}/ask`, {
+      method:  "POST",
+      headers: authHeaders(),
       body: JSON.stringify({ question })
     });
-
     const data = await res.json();
+
     removeLoader(loaderId);
 
-    if (res.ok && data.success) {
-      appendAIResponse(data);
-    } else {
-      appendAIError(data);
-    }
+    if (res.ok && data.success) pushAIResponse(data);
+    else                         pushAIError(data);
 
     loadHistory();
   } catch (e) {
     removeLoader(loaderId);
-    appendSystemMsg(`❌ Request failed: ${e.message}`, true);
+    pushSystemMsg(`✗ ${e.message}`, "error");
   }
 
   isLoading = false;
   document.getElementById("send-btn").disabled = false;
-  scrollToBottom();
+  scrollBottom();
 }
 
 // ─────────────────────────────────────────────
-// Chat rendering helpers
+// Chat rendering
 // ─────────────────────────────────────────────
-function clearWelcome() {
-  const welcome = document.querySelector(".welcome-msg");
-  if (welcome) welcome.remove();
+function scrollBottom() {
+  const c = document.getElementById("chat-messages");
+  c.scrollTop = c.scrollHeight;
 }
 
-function scrollToBottom() {
-  const cw = document.getElementById("chat-window");
-  cw.scrollTop = cw.scrollHeight;
+function removeWelcome() {
+  const w = document.getElementById("chat-welcome");
+  if (w) w.remove();
 }
 
-function appendUserMsg(text) {
-  const cw = document.getElementById("chat-window");
+function pushUserBubble(text) {
+  removeWelcome();
+  const c   = document.getElementById("chat-messages");
   const div = document.createElement("div");
-  div.className = "msg";
-  div.innerHTML = `<div class="msg-user">${escapeHtml(text)}</div>`;
-  cw.appendChild(div);
-  scrollToBottom();
-}
-
-function appendSystemMsg(html, isError = false) {
-  const cw = document.getElementById("chat-window");
-  const div = document.createElement("div");
-  div.className = "msg";
-  div.innerHTML = `<div class="${isError ? 'error-msg' : 'explanation'}">${html}</div>`;
-  cw.appendChild(div);
-  scrollToBottom();
-}
-
-function appendLoader() {
-  const cw = document.getElementById("chat-window");
-  const id = "loader-" + Date.now();
-  const div = document.createElement("div");
-  div.className = "msg";
-  div.id = id;
+  div.className = "msg-row user-row";
   div.innerHTML = `
-    <div class="msg-ai">
-      <div class="msg-ai-inner">
-        <div class="loader-msg">
-          <div class="spinner"></div>
-          Generating SQL query...
-        </div>
-      </div>
+    <div class="bubble user-bubble">
+      <span>${escHtml(text)}</span>
     </div>`;
-  cw.appendChild(div);
-  scrollToBottom();
+  c.appendChild(div);
+  scrollBottom();
+}
+
+function pushSystemMsg(html, type = "info") {
+  removeWelcome();
+  const c   = document.getElementById("chat-messages");
+  const div = document.createElement("div");
+  div.className = "msg-row system-row";
+  div.innerHTML = `<div class="system-msg ${type}">${html}</div>`;
+  c.appendChild(div);
+  scrollBottom();
+}
+
+function pushLoader() {
+  const c   = document.getElementById("chat-messages");
+  const id  = "loader-" + Date.now();
+  const div = document.createElement("div");
+  div.id        = id;
+  div.className = "msg-row ai-row";
+  div.innerHTML = `
+    <div class="ai-avatar">Q</div>
+    <div class="bubble ai-bubble loader-bubble">
+      <span class="dot-flashing"></span>
+    </div>`;
+  c.appendChild(div);
+  scrollBottom();
   return id;
 }
 
@@ -206,86 +211,91 @@ function removeLoader(id) {
   if (el) el.remove();
 }
 
-function appendAIResponse(data) {
-  const cw = document.getElementById("chat-window");
+function pushAIResponse(data) {
+  removeWelcome();
+  const c   = document.getElementById("chat-messages");
   const div = document.createElement("div");
-  div.className = "msg";
+  div.className = "msg-row ai-row";
 
-  // Build table HTML
+  // Table
   let tableHtml = "";
   if (data.rows && data.rows.length > 0) {
-    const headers = data.columns.map(c => `<th>${escapeHtml(String(c))}</th>`).join("");
-    const rows = data.rows.map(row =>
-      `<tr>${row.map(cell => `<td>${escapeHtml(cell === null ? "NULL" : String(cell))}</td>`).join("")}</tr>`
+    const ths = data.columns.map(col => `<th>${escHtml(String(col))}</th>`).join("");
+    const trs = data.rows.map(row =>
+      `<tr>${row.map(cell =>
+        `<td>${escHtml(cell === null ? "NULL" : String(cell))}</td>`
+      ).join("")}</tr>`
     ).join("");
     tableHtml = `
-      <div class="table-wrapper">
-        <table>
-          <thead><tr>${headers}</tr></thead>
-          <tbody>${rows}</tbody>
+      <div class="result-table-wrap">
+        <table class="result-table">
+          <thead><tr>${ths}</tr></thead>
+          <tbody>${trs}</tbody>
         </table>
       </div>`;
   } else {
-    tableHtml = `<div class="explanation">Query returned 0 rows.</div>`;
+    tableHtml = `<p class="zero-rows">No rows returned.</p>`;
   }
 
-  const correctedBadge = data.corrected
-    ? `<span class="badge corrected">⚡ Auto-corrected</span>`
-    : "";
+  const sqlId = "sql-" + Date.now();
 
   div.innerHTML = `
-    <div class="msg-ai">
-      <div class="msg-ai-inner">
-        <div class="sql-block">
-          <div class="sql-label">
-            Generated SQL
-            <button class="copy-sql-btn" onclick="copySQL(this, \`${escapeAttr(data.sql)}\`)">Copy</button>
-          </div>
-          <div class="sql-code">${escapeHtml(data.sql)}</div>
+    <div class="ai-avatar">Q</div>
+    <div class="bubble ai-bubble">
+
+      <div class="sql-card">
+        <div class="sql-card-header">
+          <span class="sql-tag">SQL</span>
+          <button class="copy-btn" onclick="copyText('${sqlId}', this)">Copy</button>
         </div>
-        <div class="explanation">${escapeHtml(data.explanation)}</div>
-        <div class="result-meta">
-          <span class="badge success">✓ Success</span>
-          ${correctedBadge}
-          <span>${data.row_count} row${data.row_count !== 1 ? "s" : ""} returned</span>
-        </div>
-        ${tableHtml}
+        <code id="${sqlId}" class="sql-body">${escHtml(data.sql)}</code>
       </div>
+
+      <p class="explain-text">${escHtml(data.explanation)}</p>
+
+      <div class="result-meta-row">
+        <span class="tag tag-success">✓ ${data.row_count} row${data.row_count !== 1 ? "s" : ""}</span>
+        ${data.corrected ? `<span class="tag tag-warn">⚡ Auto-corrected</span>` : ""}
+      </div>
+
+      ${tableHtml}
     </div>`;
 
-  cw.appendChild(div);
-  scrollToBottom();
+  c.appendChild(div);
+  scrollBottom();
 }
 
-function appendAIError(data) {
-  const cw = document.getElementById("chat-window");
+function pushAIError(data) {
+  removeWelcome();
+  const c   = document.getElementById("chat-messages");
   const div = document.createElement("div");
-  div.className = "msg";
+  div.className = "msg-row ai-row";
 
   const sqlSection = data.sql ? `
-    <div class="sql-block">
-      <div class="sql-label">Generated SQL</div>
-      <div class="sql-code">${escapeHtml(data.sql)}</div>
+    <div class="sql-card">
+      <div class="sql-card-header"><span class="sql-tag">SQL</span></div>
+      <code class="sql-body">${escHtml(data.sql)}</code>
     </div>` : "";
 
-  const blockedNote = data.blocked
-    ? `<div class="explanation">🛡️ This query was blocked by the safety guardrail.</div>`
+  const note = data.blocked
+    ? `<p class="explain-text">🛡 Blocked by safety guardrail.</p>`
     : data.corrected_attempted
-    ? `<div class="explanation">⚡ Auto-correction was attempted but the query still failed.</div>`
+    ? `<p class="explain-text">⚡ Auto-correction attempted but failed.</p>`
     : "";
 
   div.innerHTML = `
-    <div class="msg-ai">
-      <div class="msg-ai-inner">
-        ${sqlSection}
-        ${blockedNote}
-        <div class="result-meta"><span class="badge error">✗ Failed</span></div>
-        <div class="error-msg">${escapeHtml(data.error || "Unknown error")}</div>
+    <div class="ai-avatar">Q</div>
+    <div class="bubble ai-bubble">
+      ${sqlSection}
+      ${note}
+      <div class="result-meta-row">
+        <span class="tag tag-error">✗ Failed</span>
       </div>
+      <div class="error-box">${escHtml(data.error || "Unknown error")}</div>
     </div>`;
 
-  cw.appendChild(div);
-  scrollToBottom();
+  c.appendChild(div);
+  scrollBottom();
 }
 
 // ─────────────────────────────────────────────
@@ -293,43 +303,43 @@ function appendAIError(data) {
 // ─────────────────────────────────────────────
 async function loadHistory() {
   try {
-    const res = await fetch(`${API}/history`);
+    const res  = await fetch(`${API}/history`, {
+      headers: { "Authorization": `Bearer ${getToken()}` }
+    });
     const data = await res.json();
     renderHistory(data);
-  } catch (e) {
-    console.error("Failed to load history", e);
-  }
+  } catch (e) { /* silent */ }
 }
 
 function renderHistory(entries) {
   const list = document.getElementById("history-list");
   if (!entries || entries.length === 0) {
-    list.innerHTML = `<p class="empty-msg">No queries yet.</p>`;
+    list.innerHTML = `<p class="empty-hint">No queries yet</p>`;
     return;
   }
-
   list.innerHTML = entries.map(e => `
-    <div class="history-item ${e.success ? "" : "failed"}" onclick="fillQuestion(${JSON.stringify(escapeHtml(e.question))})">
-      <div class="h-question">${escapeHtml(e.question)}</div>
-      <div class="h-meta">${e.timestamp} · ${e.success ? e.row_count + " rows" : "failed"}</div>
-    </div>
-  `).join("");
+    <div class="history-item ${e.success ? "" : "failed"}"
+         onclick="fillInput('${escHtml(e.question).replace(/'/g, "\\'")}')">
+      <div class="h-q">${escHtml(e.question)}</div>
+      <div class="h-meta">${e.timestamp.split(" ")[1]} · ${e.success ? e.row_count + " rows" : "failed"}</div>
+    </div>`).join("");
 }
 
 async function clearHistory() {
-  await fetch(`${API}/history/clear`, { method: "POST" });
+  await fetch(`${API}/history/clear`, { method: "POST", headers: authHeaders() });
   loadHistory();
 }
 
-function fillQuestion(question) {
-  document.getElementById("question-input").value = question;
-  document.getElementById("question-input").focus();
+function fillInput(q) {
+  const input = document.getElementById("chat-input");
+  input.value = q;
+  input.focus();
 }
 
 // ─────────────────────────────────────────────
 // Utilities
 // ─────────────────────────────────────────────
-function escapeHtml(str) {
+function escHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -337,34 +347,21 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-function escapeAttr(str) {
-  return String(str).replace(/`/g, "\\`").replace(/\$/g, "\\$");
-}
-
-async function copySQL(btn, sql) {
-  await navigator.clipboard.writeText(sql);
+async function copyText(id, btn) {
+  const text = document.getElementById(id)?.textContent || "";
+  await navigator.clipboard.writeText(text);
   btn.textContent = "Copied!";
   setTimeout(() => btn.textContent = "Copy", 2000);
 }
 
 // Auto-resize textarea
 document.addEventListener("DOMContentLoaded", () => {
-  const ta = document.getElementById("question-input");
-  ta.addEventListener("input", () => {
-    ta.style.height = "auto";
-    ta.style.height = ta.scrollHeight + "px";
-  });
-
-  // Check if backend is already up
-  fetch(`${API}/health`)
-    .then(r => r.json())
-    .then(d => {
-      if (d.connected) {
-        isConnected = true;
-        setStatus("connected", "● Connected");
-        clearWelcome();
-        loadHistory();
-      }
-    })
-    .catch(() => {});
+  const ta = document.getElementById("chat-input");
+  if (ta) {
+    ta.addEventListener("input", () => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
+    });
+  }
+  initAuth();
 });
