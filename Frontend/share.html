@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QueryMind — Shared Query</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@400&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .share-page { max-width: 760px; margin: 0 auto; padding: 40px 24px; }
+    .share-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; font-family: var(--font-head); font-size: 1.1rem; font-weight: 700; color: var(--bright); }
+    .share-question { font-size: 1.1rem; color: var(--bright); font-weight: 500; margin-bottom: 20px; line-height: 1.5; }
+    .share-meta { font-size: .8rem; color: var(--muted); margin-bottom: 28px; }
+    .back-btn { padding: 8px 18px; background: var(--ink3); border: 1px solid var(--border); color: var(--body); border-radius: 8px; cursor: pointer; font-family: var(--font-ui); margin-top: 28px; display: inline-block; text-decoration: none; }
+  </style>
+</head>
+<body style="overflow-y:auto; height:auto;">
+<div class="share-page">
+  <div class="share-brand"><span style="color:var(--cyan)">⬡</span> QueryMind AI</div>
+  <div id="share-content"><p class="empty-hint">Loading...</p></div>
+  <a href="index.html" class="back-btn">← Back to QueryMind</a>
+</div>
+<script>
+const API = "http://localhost:5000/api";
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+async function loadShare() {
+  const id  = new URLSearchParams(window.location.search).get("id");
+  if (!id)  { document.getElementById("share-content").innerHTML = `<p class="error-box">No share ID provided.</p>`; return; }
+  const res  = await fetch(`${API}/share/${id}`);
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("share-content").innerHTML = `<p class="error-box">${data.error}</p>`; return; }
+
+  const ths = data.columns.map(c => `<th>${escHtml(c)}</th>`).join("");
+  const trs = data.rows.map(r => `<tr>${r.map(v => `<td>${escHtml(v===null?"NULL":String(v))}</td>`).join("")}</tr>`).join("");
+
+  document.getElementById("share-content").innerHTML = `
+    <div class="share-question">❝ ${escHtml(data.question)} ❞</div>
+    <div class="share-meta">Shared query · ${data.row_count} rows returned</div>
+    <div class="sql-card" style="margin-bottom:20px;">
+      <div class="sql-card-header"><span class="sql-tag">SQL</span></div>
+      <code class="sql-body">${escHtml(data.sql_query)}</code>
+    </div>
+    <div class="result-table-wrap">
+      <table class="result-table">
+        <thead><tr>${ths}</tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+}
+loadShare();
+</script>
+</body>
+</html>

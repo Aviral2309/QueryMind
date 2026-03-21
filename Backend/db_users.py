@@ -18,7 +18,6 @@ def get_mysql_connection():
 
 
 def init_users_table():
-    """Create users table if it doesn't exist."""
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:

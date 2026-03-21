@@ -17,86 +17,81 @@ def get_conn():
     )
 
 
-def init_history_table():
+def init_saved_queries_table():
     conn = get_conn()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS query_history (
+                CREATE TABLE IF NOT EXISTS saved_queries (
                     id          INT AUTO_INCREMENT PRIMARY KEY,
                     user_id     INT NOT NULL,
+                    name        VARCHAR(255) NOT NULL,
+                    collection  VARCHAR(100) DEFAULT 'General',
                     question    TEXT NOT NULL,
-                    sql_query   TEXT,
-                    success     BOOLEAN DEFAULT FALSE,
-                    row_count   INT DEFAULT 0,
-                    error       TEXT,
+                    sql_query   TEXT NOT NULL,
                     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 );
             """)
         conn.commit()
-        print("✅ History table ready.")
+        print("✅ Saved queries table ready.")
     finally:
         conn.close()
 
 
-def add_entry(user_id, question, sql, success, row_count=0, error=None):
+def save_query(user_id, name, question, sql, collection="General"):
     conn = get_conn()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO query_history
-                    (user_id, question, sql_query, success, row_count, error)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (user_id, question, sql, success, row_count, error))
+                INSERT INTO saved_queries (user_id, name, collection, question, sql_query)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_id, name, collection, question, sql))
         conn.commit()
+        return {"saved": True, "id": cursor.lastrowid}
     finally:
         conn.close()
 
 
-def get_history(user_id, limit=50):
+def get_saved_queries(user_id):
     conn = get_conn()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT id, question, sql_query as sql, success,
-                       row_count, error,
-                       DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as timestamp
-                FROM query_history
+                SELECT id, name, collection, question, sql_query,
+                       DATE_FORMAT(created_at, '%Y-%m-%d') as date
+                FROM saved_queries
                 WHERE user_id = %s
-                ORDER BY created_at DESC
-                LIMIT %s
-            """, (user_id, limit))
+                ORDER BY collection, created_at DESC
+            """, (user_id,))
             return cursor.fetchall()
     finally:
         conn.close()
 
 
-def clear_history(user_id):
+def delete_saved_query(query_id, user_id):
     conn = get_conn()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "DELETE FROM query_history WHERE user_id = %s", (user_id,)
+                "DELETE FROM saved_queries WHERE id = %s AND user_id = %s",
+                (query_id, user_id)
             )
         conn.commit()
-        return {"cleared": True}
+        return {"deleted": True}
     finally:
         conn.close()
 
 
-def get_stats(user_id):
+def get_collections(user_id):
     conn = get_conn()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT
-                    COUNT(*) as total,
-                    SUM(success) as successful,
-                    COUNT(*) - SUM(success) as failed,
-                    ROUND(SUM(success) / COUNT(*) * 100, 1) as success_rate
-                FROM query_history WHERE user_id = %s
+                SELECT DISTINCT collection FROM saved_queries
+                WHERE user_id = %s ORDER BY collection
             """, (user_id,))
-            return cursor.fetchone()
+            rows = cursor.fetchall()
+            return [r["collection"] for r in rows]
     finally:
         conn.close()

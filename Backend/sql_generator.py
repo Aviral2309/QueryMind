@@ -31,48 +31,99 @@ SQL Query:
 """)
 
 correction_prompt = ChatPromptTemplate.from_template("""
-You are an expert SQL developer. The following SQL query produced an error.
-Fix the query so it works correctly.
+You are an expert SQL developer. Fix the following broken SQL query.
 
 STRICT RULES:
-- Return ONLY the corrected raw SQL query — no explanation, no markdown, no code fences
-- Write the entire query on a single line
-- Only use SELECT statements
+- Return ONLY the corrected raw SQL — no explanation, no markdown, no code fences
+- Single line only
+- SELECT only
 
-Original Question: {question}
-Table Schema: {schema}
+Question: {question}
+Schema: {schema}
 Broken SQL: {broken_sql}
-Error Message: {error}
+Error: {error}
 
-Corrected SQL Query:
+Corrected SQL:
 """)
 
 explanation_prompt = ChatPromptTemplate.from_template("""
-Explain the following SQL query in simple plain English in 2-3 sentences.
+Explain this SQL query in 2-3 plain English sentences.
 Mention which tables were used and what the query does.
-Do not include the SQL itself in your explanation.
+Do not include the SQL itself.
 
-SQL Query: {sql}
-Question it answers: {question}
+SQL: {sql}
+Question: {question}
+""")
+
+suggestions_prompt = ChatPromptTemplate.from_template("""
+You are a data analyst. Based on the database schema below,
+suggest exactly 5 interesting questions a user could ask about this data.
+
+STRICT RULES:
+- Return exactly 5 questions
+- One question per line
+- No numbering, no bullets, no extra text
+- Keep each question short and specific (under 10 words)
+- Questions should be answerable with a SELECT query
+
+Schema:
+{schema}
+
+5 Questions:
+""")
+
+chart_detection_prompt = ChatPromptTemplate.from_template("""
+Given these SQL query results, determine the best chart type to visualize them.
+
+Columns: {columns}
+Sample rows (first 3): {sample_rows}
+Question asked: {question}
+
+Return ONLY one of these exact strings — nothing else:
+- bar
+- line
+- pie
+- none
+
+Chart type:
 """)
 
 
 def generate_sql(schema: str, question: str) -> str:
     chain  = generation_prompt | llm | StrOutputParser()
-    result = chain.invoke({"schema": schema, "question": question})
-    return result.strip()
+    return chain.invoke({"schema": schema, "question": question}).strip()
 
 
 def correct_sql(schema: str, question: str, broken_sql: str, error: str) -> str:
     chain  = correction_prompt | llm | StrOutputParser()
-    result = chain.invoke({
+    return chain.invoke({
         "schema": schema, "question": question,
         "broken_sql": broken_sql, "error": error
-    })
-    return result.strip()
+    }).strip()
 
 
 def explain_sql(sql: str, question: str) -> str:
     chain  = explanation_prompt | llm | StrOutputParser()
-    result = chain.invoke({"sql": sql, "question": question})
-    return result.strip()
+    return chain.invoke({"sql": sql, "question": question}).strip()
+
+
+def suggest_questions(schema: str) -> list:
+    chain    = suggestions_prompt | llm | StrOutputParser()
+    result   = chain.invoke({"schema": schema}).strip()
+    questions = [q.strip() for q in result.split("\n") if q.strip()]
+    return questions[:5]
+
+
+def detect_chart_type(columns: list, rows: list, question: str) -> str:
+    if not rows or len(rows) == 0:
+        return "none"
+    sample = rows[:3]
+    chain  = chart_detection_prompt | llm | StrOutputParser()
+    result = chain.invoke({
+        "columns":     str(columns),
+        "sample_rows": str(sample),
+        "question":    question
+    }).strip().lower()
+    if result not in ["bar", "line", "pie"]:
+        return "none"
+    return result

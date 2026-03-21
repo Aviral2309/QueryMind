@@ -1,5 +1,6 @@
 flask
 flask-cors
+flask-jwt-extended
 langchain
 langchain-google-genai
 langchain-community
@@ -7,8 +8,10 @@ pymysql
 sqlparse
 python-dotenv
 google-generativeai
-langchain-ollama
-flask-jwt-extended
 bcrypt
 authlib
 requests
+faiss-cpu
+sentence-transformers
+pandas
+shortuuid

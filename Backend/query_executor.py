@@ -9,11 +9,6 @@ def execute_query(sql: str) -> dict:
             result  = conn.execute(text(sql))
             columns = list(result.keys())
             rows    = [list(row) for row in result.fetchall()]
-        return {
-            "success":   True,
-            "columns":   columns,
-            "rows":      rows,
-            "row_count": len(rows)
-        }
+        return {"success": True, "columns": columns, "rows": rows, "row_count": len(rows)}
     except Exception as e:
         return {"success": False, "error": str(e)}
