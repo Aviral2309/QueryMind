@@ -10,37 +10,65 @@ _raw_conn_string = None
 def connect_mysql(host, port, username, password, database):
     global _db_instance, _db_type, _raw_conn_string
     encoded_password = quote_plus(password)
-    uri              = f"mysql+pymysql://{username}:{encoded_password}@{host}:{port}/{database}"
-    _db_instance     = SQLDatabase.from_uri(uri, sample_rows_in_table_info=1)
+    uri = (f"mysql+pymysql://{username}:{encoded_password}"
+           f"@{host}:{port}/{database}")
+    _db_instance     = SQLDatabase.from_uri(
+        uri, sample_rows_in_table_info=1)
     _db_type         = "mysql"
     _raw_conn_string = uri
-    return {"status": "connected", "db_type": "mysql", "database": database}
+    return {
+        "status": "connected", "db_type": "mysql", "database": database
+    }
 
 
 def connect_sqlite(filepath):
     global _db_instance, _db_type, _raw_conn_string
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"SQLite file not found: {filepath}")
-    uri              = f"sqlite:///{filepath}"
-    _db_instance     = SQLDatabase.from_uri(uri, sample_rows_in_table_info=1)
+    uri = f"sqlite:///{filepath}"
+    _db_instance     = SQLDatabase.from_uri(
+        uri, sample_rows_in_table_info=1)
     _db_type         = "sqlite"
     _raw_conn_string = uri
-    return {"status": "connected", "db_type": "sqlite", "filepath": filepath}
+    return {
+        "status": "connected", "db_type": "sqlite", "filepath": filepath
+    }
 
 
 def connect_uploaded_db(filepath):
     global _db_instance, _db_type, _raw_conn_string
-    uri              = f"sqlite:///{filepath}"
-    _db_instance     = SQLDatabase.from_uri(uri, sample_rows_in_table_info=1)
+    uri = f"sqlite:///{filepath}"
+    _db_instance     = SQLDatabase.from_uri(
+        uri, sample_rows_in_table_info=1)
     _db_type         = "sqlite_upload"
     _raw_conn_string = uri
-    return {"status": "connected", "db_type": "sqlite_upload", "filepath": filepath}
+    return {
+        "status": "connected",
+        "db_type": "sqlite_upload",
+        "filepath": filepath
+    }
+
+
+def connect_url(db_url: str):
+    """Connect using a raw database URL."""
+    global _db_instance, _db_type, _raw_conn_string
+    _db_instance     = SQLDatabase.from_uri(
+        db_url, sample_rows_in_table_info=1)
+    _db_type         = "url"
+    _raw_conn_string = db_url
+    return {
+        "status": "connected", "db_type": "url", "url": db_url
+    }
 
 
 def get_db():
     if _db_instance is None:
         raise ConnectionError("No database connected.")
     return _db_instance
+
+
+def get_engine():
+    return get_db()._engine
 
 
 def get_schema():

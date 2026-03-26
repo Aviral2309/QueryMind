@@ -40,12 +40,14 @@ def init_users_table():
         conn.close()
 
 
-def create_user(name, email, hashed_password, auth_type="email", google_id=None, avatar=None):
+def create_user(name, email, hashed_password,
+                auth_type="email", google_id=None, avatar=None):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                INSERT INTO users (name, email, password, auth_type, google_id, avatar)
+                INSERT INTO users
+                    (name, email, password, auth_type, google_id, avatar)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (name, email, hashed_password, auth_type, google_id, avatar))
             conn.commit()
@@ -86,7 +88,8 @@ def get_user_by_google_id(google_id):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM users WHERE google_id = %s", (google_id,))
+            cursor.execute(
+                "SELECT * FROM users WHERE google_id = %s", (google_id,))
             return cursor.fetchone()
     finally:
         conn.close()
@@ -98,8 +101,23 @@ def update_last_login(user_id):
         with conn.cursor() as cursor:
             cursor.execute(
                 "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = %s",
-                (user_id,)
-            )
+                (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_user_profile(user_id, name=None, avatar=None):
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cursor:
+            if name:
+                cursor.execute(
+                    "UPDATE users SET name = %s WHERE id = %s", (name, user_id))
+            if avatar:
+                cursor.execute(
+                    "UPDATE users SET avatar = %s WHERE id = %s",
+                    (avatar, user_id))
         conn.commit()
     finally:
         conn.close()
