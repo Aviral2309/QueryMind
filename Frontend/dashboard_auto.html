@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QueryMind — Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="dashboard_auto.css"/>
+</head>
+<body>
+<div id="dash-app">
+
+  <div class="dash-sidebar">
+    <div class="dash-brand">
+      <svg width="16" height="16" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83
+                 M16.95 16.95l2.83 2.83M1 12h4M19 12h4
+                 M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+      </svg>
+      QueryMind Analytics
+    </div>
+    <nav class="dash-nav">
+      <button class="dash-nav-btn active"
+              onclick="showSection('overview')">Overview</button>
+      <button class="dash-nav-btn"
+              onclick="showSection('charts')">Charts</button>
+      <button class="dash-nav-btn"
+              onclick="showSection('profiler')">Data Profiler</button>
+      <button class="dash-nav-btn"
+              onclick="showSection('history')">Query History</button>
+    </nav>
+    <a href="index.html" class="dash-back-link">
+      &larr; Back to Chat
+    </a>
+  </div>
+
+  <div class="dash-main">
+    <div class="dash-topbar">
+      <div class="dash-topbar-title" id="dash-db-name">
+        Analytics Dashboard
+      </div>
+      <button class="dash-refresh-btn" onclick="loadDashboard()">
+        Refresh
+      </button>
+    </div>
+
+    <!-- Overview -->
+    <section class="dash-section" id="sec-overview">
+      <div class="dash-section-label">Key Metrics</div>
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-placeholder">
+          Connect a database to see metrics
+        </div>
+      </div>
+
+      <div class="dash-section-label" style="margin-top:24px;">
+        Tables
+      </div>
+      <div class="tables-grid" id="tables-grid">
+        <p class="empty-hint">Loading...</p>
+      </div>
+
+      <div class="dash-section-label" style="margin-top:24px;">
+        Query Performance (30 days)
+      </div>
+      <div class="dash-card">
+        <div class="dash-chart-wrap">
+          <canvas id="perf-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="dash-section hidden" id="sec-charts">
+      <div class="dash-section-label">Auto-Generated Charts</div>
+      <div class="charts-grid" id="charts-grid">
+        <p class="empty-hint">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Data Profiler -->
+    <section class="dash-section hidden" id="sec-profiler">
+      <div class="dash-section-label">Data Profiler</div>
+      <div id="profiler-content">
+        <p class="empty-hint">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Query History -->
+    <section class="dash-section hidden" id="sec-history">
+      <div class="dash-section-label">Recent Queries</div>
+      <div id="history-content">
+        <p class="empty-hint">Loading...</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="dashboard_auto.js"></script>
+</body>
+</html>

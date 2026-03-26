@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QueryMind — Analytics Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="dashboard.css"/>
+</head>
+<body>
+<div id="dashboard-app">
+
+  <div class="dash-sidebar">
+    <div class="dash-brand">
+      <span class="logo-mark">◈</span>
+      <span>QueryMind</span>
+    </div>
+    <nav class="dash-nav">
+      <a class="dash-nav-item active" onclick="showSection('overview')">
+        ◉ Overview
+      </a>
+      <a class="dash-nav-item" onclick="showSection('accuracy')">
+        ◈ Accuracy
+      </a>
+      <a class="dash-nav-item" onclick="showSection('usage')">
+        ⬡ Usage
+      </a>
+      <a class="dash-nav-item" onclick="showSection('queries')">
+        ⊞ Queries
+      </a>
+    </nav>
+    <a href="index.html" class="dash-back">← Back to App</a>
+  </div>
+
+  <div class="dash-main">
+
+    <div class="dash-topbar">
+      <div class="dash-title">Analytics Dashboard</div>
+      <div class="dash-topbar-right">
+        <span class="dash-badge">RAGAS Powered</span>
+      </div>
+    </div>
+
+    <!-- ── OVERVIEW ── -->
+    <section class="dash-section active" id="section-overview">
+
+      <!-- KPI cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon">◉</div>
+          <div class="kpi-value" id="kpi-overall">—</div>
+          <div class="kpi-label">Overall Score</div>
+          <div class="kpi-sub" id="kpi-overall-sub"></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">✓</div>
+          <div class="kpi-value" id="kpi-sql">—</div>
+          <div class="kpi-label">SQL Correctness</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">⬡</div>
+          <div class="kpi-value" id="kpi-faith">—</div>
+          <div class="kpi-label">Faithfulness</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">◈</div>
+          <div class="kpi-value" id="kpi-relevancy">—</div>
+          <div class="kpi-label">Answer Relevancy</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">▲</div>
+          <div class="kpi-value" id="kpi-precision">—</div>
+          <div class="kpi-label">Context Precision</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">⊞</div>
+          <div class="kpi-value" id="kpi-total">—</div>
+          <div class="kpi-label">Total Evaluated</div>
+        </div>
+      </div>
+
+      <!-- Score trend chart -->
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <span>Score Trend (14 days)</span>
+          <div class="chart-legend">
+            <span class="legend-dot red"></span> Overall
+            <span class="legend-dot dark-red"></span> SQL
+          </div>
+        </div>
+        <div class="dash-chart-wrap">
+          <canvas id="trend-chart"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── ACCURACY ── -->
+    <section class="dash-section hidden" id="section-accuracy">
+
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <span>Metric Breakdown</span>
+        </div>
+        <div class="metrics-breakdown" id="metrics-breakdown">
+          <p class="empty-hint">Loading...</p>
+        </div>
+      </div>
+
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <span>Low Scoring Queries</span>
+          <span class="card-sub">Queries that need improvement</span>
+        </div>
+        <div id="low-queries-list">
+          <p class="empty-hint">Loading...</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── USAGE ── -->
+    <section class="dash-section hidden" id="section-usage">
+
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="kpi-card">
+          <div class="kpi-value" id="u-total">—</div>
+          <div class="kpi-label">Total Queries</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="u-success">—</div>
+          <div class="kpi-label">Successful</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="u-rate">—</div>
+          <div class="kpi-label">Success Rate</div>
+        </div>
+      </div>
+
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <span>Daily Query Volume (30 days)</span>
+        </div>
+        <div class="dash-chart-wrap">
+          <canvas id="usage-chart"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── QUERIES ── -->
+    <section class="dash-section hidden" id="section-queries">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <span>Recent Query History</span>
+        </div>
+        <div id="query-history-table">
+          <p class="empty-hint">Loading...</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,199 +1,410 @@
-let isConnected   = false;
-let isLoading     = false;
-let isDarkMode    = true;
+let isConnected    = false;
+let isLoading      = false;
+let currentSession = null;
 let chartInstances = {};
 
-// ─────────────────────────────────────────────
-// DB Tab switching
-// ─────────────────────────────────────────────
-function switchDbTab(type) {
-  document.querySelectorAll(".db-tab-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.type === type)
+// ── Sidebar tabs ──────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll(".sidebar-panel").forEach(p =>
+    p.classList.toggle("hidden", p.id !== `panel-${name}`)
   );
-  document.getElementById("mysql-form").style.display   = type === "mysql"  ? "flex" : "none";
-  document.getElementById("sqlite-form").style.display  = type === "sqlite" ? "flex" : "none";
-  document.getElementById("upload-form").style.display  = type === "upload" ? "flex" : "none";
+  document.querySelectorAll(".sidebar-tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.tab === name)
+  );
 }
 
-// ─────────────────────────────────────────────
-// Connect MySQL
-// ─────────────────────────────────────────────
+// ── DB type tabs ──────────────────────────────────────────────────────────────
+function switchDbType(type) {
+  ["mysql", "sqlite", "url"].forEach(t => {
+    const el = document.getElementById(`form-${t}`);
+    if (el) el.style.display = t === type ? "flex" : "none";
+  });
+  document.querySelectorAll(".db-type-tab").forEach(t =>
+    t.classList.toggle("active", t.dataset.type === type)
+  );
+}
+
+// ── Connect MySQL ─────────────────────────────────────────────────────────────
 async function connectMySQL() {
-  const btn = document.getElementById("mysql-connect-btn");
+  const btn = document.getElementById("mysql-btn");
   btn.textContent = "Connecting..."; btn.disabled = true;
   setConnStatus("connecting", "Connecting...");
   try {
     const res  = await fetch(`${API}/connect/mysql`, {
       method: "POST", headers: authHeaders(),
       body: JSON.stringify({
-        host:     document.getElementById("db-host").value,
-        port:     document.getElementById("db-port").value,
-        username: document.getElementById("db-user").value,
-        password: document.getElementById("db-pass").value,
-        database: document.getElementById("db-name").value
+        host:     val("mysql-host"),
+        port:     val("mysql-port"),
+        username: val("mysql-user"),
+        password: val("mysql-pass"),
+        database: val("mysql-db"),
+        nickname: val("mysql-nick")
       })
     });
     const data = await res.json();
     if (res.ok) {
       isConnected = true;
-      setConnStatus("online", data.database);
-      pushSystemMsg(`✓ Connected to <strong>${data.database}</strong> · ${data.tables_indexed} tables indexed`, "success");
-      loadHistory(); loadSchemaExplorer(); loadSuggestions();
-    } else { setConnStatus("offline", "Failed"); pushSystemMsg(`✗ ${data.error}`, "error"); }
-  } catch (e) { setConnStatus("offline", "Error"); pushSystemMsg(`✗ ${e.message}`, "error"); }
+      setConnStatus("online", val("mysql-db") || "MySQL");
+      toast(`Connected — ${data.tables_indexed} tables indexed`, "success");
+      await newSession("mysql", val("mysql-db"));
+      loadSchemaExplorer(); loadSuggestions(); loadConnections();
+    } else {
+      setConnStatus("offline", "Failed");
+      toast(data.error, "error");
+    }
+  } catch (e) {
+    setConnStatus("offline", "Error"); toast(e.message, "error");
+  }
   btn.textContent = "Connect"; btn.disabled = false;
 }
 
-// ─────────────────────────────────────────────
-// Connect SQLite
-// ─────────────────────────────────────────────
+// ── Connect SQLite ────────────────────────────────────────────────────────────
 async function connectSQLite() {
-  const btn = document.getElementById("sqlite-connect-btn");
+  const btn = document.getElementById("sqlite-btn");
   btn.textContent = "Connecting..."; btn.disabled = true;
   setConnStatus("connecting", "Connecting...");
   try {
     const res  = await fetch(`${API}/connect/sqlite`, {
       method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ filepath: document.getElementById("sqlite-path").value })
+      body: JSON.stringify({ filepath: val("sqlite-path") })
     });
     const data = await res.json();
     if (res.ok) {
       isConnected = true;
       setConnStatus("online", "SQLite");
-      pushSystemMsg(`✓ Connected to SQLite · ${data.tables_indexed} tables indexed`, "success");
-      loadHistory(); loadSchemaExplorer(); loadSuggestions();
-    } else { setConnStatus("offline", "Failed"); pushSystemMsg(`✗ ${data.error}`, "error"); }
-  } catch (e) { setConnStatus("offline", "Error"); pushSystemMsg(`✗ ${e.message}`, "error"); }
+      toast(`Connected — ${data.tables_indexed} tables indexed`, "success");
+      await newSession("sqlite", "SQLite");
+      loadSchemaExplorer(); loadSuggestions(); loadConnections();
+    } else {
+      setConnStatus("offline", "Failed"); toast(data.error, "error");
+    }
+  } catch (e) {
+    setConnStatus("offline", "Error"); toast(e.message, "error");
+  }
   btn.textContent = "Connect"; btn.disabled = false;
 }
 
-// ─────────────────────────────────────────────
-// Upload file
-// ─────────────────────────────────────────────
+// ── Connect URL ───────────────────────────────────────────────────────────────
+async function connectURL() {
+  const btn = document.getElementById("url-btn");
+  btn.textContent = "Connecting..."; btn.disabled = true;
+  setConnStatus("connecting", "Connecting...");
+  try {
+    const res  = await fetch(`${API}/connect/url`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({
+        url:      val("db-url"),
+        nickname: val("url-nick")
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      isConnected = true;
+      setConnStatus("online", "Remote DB");
+      toast(`Connected — ${data.tables_indexed} tables indexed`, "success");
+      await newSession("url", "Remote DB");
+      loadSchemaExplorer(); loadSuggestions(); loadConnections();
+    } else {
+      setConnStatus("offline", "Failed"); toast(data.error, "error");
+    }
+  } catch (e) {
+    setConnStatus("offline", "Error"); toast(e.message, "error");
+  }
+  btn.textContent = "Connect"; btn.disabled = false;
+}
+
+// ── Upload file ───────────────────────────────────────────────────────────────
 async function uploadFile() {
-  const fileInput = document.getElementById("file-upload");
-  const btn       = document.getElementById("upload-connect-btn");
-  if (!fileInput.files.length) { pushSystemMsg("⚠ Please select a file first.", "warning"); return; }
+  const fileInput = document.getElementById("file-input");
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    toast("Please select a file first.", "warning"); return;
+  }
 
-  const formData = new FormData();
-  formData.append("file", fileInput.files[0]);
+  const file     = fileInput.files[0];
+  const allowed  = [".csv", ".sqlite", ".db", ".sql"];
+  const ext      = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
 
+  if (!allowed.includes(ext)) {
+    toast("Unsupported file. Use .csv, .sqlite, .db, or .sql", "error");
+    return;
+  }
+
+  const btn = document.getElementById("upload-btn");
   btn.textContent = "Uploading..."; btn.disabled = true;
   setConnStatus("connecting", "Uploading...");
 
+  const formData = new FormData();
+  formData.append("file", file);
+
   try {
     const res  = await fetch(`${API}/connect/upload`, {
-      method: "POST",
+      method:  "POST",
       headers: { "Authorization": `Bearer ${getToken()}` },
-      body: formData
+      body:    formData
     });
     const data = await res.json();
     if (res.ok) {
       isConnected = true;
       setConnStatus("online", data.original_name || "Uploaded DB");
-      pushSystemMsg(`✓ Uploaded <strong>${data.original_name}</strong> · ${data.tables_indexed} tables indexed`, "success");
-      loadHistory(); loadSchemaExplorer(); loadSuggestions();
-    } else { setConnStatus("offline", "Failed"); pushSystemMsg(`✗ ${data.error}`, "error"); }
-  } catch (e) { setConnStatus("offline", "Error"); pushSystemMsg(`✗ ${e.message}`, "error"); }
+      toast(`Uploaded — ${data.tables_indexed} tables indexed`, "success");
+      await newSession("upload", data.original_name || "Upload");
+      loadSchemaExplorer(); loadSuggestions(); loadConnections();
+    } else {
+      setConnStatus("offline", "Failed"); toast(data.error, "error");
+    }
+  } catch (e) {
+    setConnStatus("offline", "Error"); toast(e.message, "error");
+  }
   btn.textContent = "Upload & Connect"; btn.disabled = false;
 }
 
-// ─────────────────────────────────────────────
-// Connection status
-// ─────────────────────────────────────────────
-function setConnStatus(state, text) {
-  document.getElementById("conn-status-dot").className    = `status-dot ${state}`;
-  document.getElementById("conn-status-text").textContent = text;
+// ── Reconnect saved ───────────────────────────────────────────────────────────
+async function reconnect(connId, label) {
+  setConnStatus("connecting", "Reconnecting...");
+  try {
+    const res  = await fetch(`${API}/connect/saved/${connId}`, {
+      method: "POST", headers: authHeaders()
+    });
+    const data = await res.json();
+    if (res.ok) {
+      isConnected = true;
+      setConnStatus("online", label);
+      toast(`Reconnected — ${data.tables_indexed} tables indexed`, "success");
+      await newSession(data.db_type, label);
+      loadSchemaExplorer(); loadSuggestions();
+      switchTab("chat");
+    } else {
+      setConnStatus("offline", "Failed"); toast(data.error, "error");
+    }
+  } catch (e) {
+    setConnStatus("offline", "Error"); toast(e.message, "error");
+  }
 }
 
-// ─────────────────────────────────────────────
-// Schema Explorer
-// ─────────────────────────────────────────────
+// ── Status ────────────────────────────────────────────────────────────────────
+function setConnStatus(state, text) {
+  const dot  = document.getElementById("conn-dot");
+  const lbl  = document.getElementById("conn-label");
+  if (dot)  dot.className  = `conn-dot ${state}`;
+  if (lbl) lbl.textContent = text;
+}
+
+// ── Session ───────────────────────────────────────────────────────────────────
+async function newSession(dbType, dbName) {
+  try {
+    const res  = await fetch(`${API}/sessions/new`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ db_type: dbType, db_name: dbName })
+    });
+    const data = await res.json();
+    currentSession = data.session_id;
+    clearChat();
+    loadSessions();
+  } catch (e) { currentSession = null; }
+}
+
+async function loadSessions() {
+  try {
+    const res  = await fetch(`${API}/sessions`, { headers: authHeaders() });
+    const list = await res.json();
+    renderSessions(list);
+  } catch (e) { /* silent */ }
+}
+
+function renderSessions(sessions) {
+  const el = document.getElementById("sessions-list");
+  if (!el) return;
+  if (!sessions || sessions.length === 0) {
+    el.innerHTML = `<p class="empty-hint">No sessions yet</p>`; return;
+  }
+  el.innerHTML = sessions.map(s => `
+    <div class="session-row ${s.session_id === currentSession ? "active" : ""}"
+         onclick="loadSession('${s.session_id}','${esc(s.title)}')">
+      <div class="session-row-info">
+        <div class="session-row-title">${esc(s.title || "Untitled")}</div>
+        <div class="session-row-meta">
+          ${esc(s.db_name || "")} &middot; ${s.message_count || 0} messages
+        </div>
+      </div>
+      <button class="icon-btn-sm"
+              onclick="event.stopPropagation();deleteSession('${s.session_id}')">
+        &times;
+      </button>
+    </div>`).join("");
+}
+
+async function loadSession(sessionId, title) {
+  currentSession = sessionId;
+  clearChat();
+  document.getElementById("chat-session-label").textContent = title;
+
+  try {
+    const res  = await fetch(
+      `${API}/sessions/${sessionId}/messages`, { headers: authHeaders() });
+    const msgs = await res.json();
+    msgs.forEach(m => {
+      if (m.role === "user") pushUser(m.content);
+      else pushAI({
+        sql:         m.sql_query || "",
+        explanation: m.content,
+        columns:     m.columns  || [],
+        rows:        m.rows     || [],
+        row_count:   m.row_count || 0,
+        chart_data:  m.chart_data || {},
+        corrected:   false,
+        insights:    [],
+        anomalies:   [],
+        forecast:    {}
+      }, true);
+    });
+    loadSessions();
+    switchTab("chat");
+  } catch (e) { toast("Failed to load session", "error"); }
+}
+
+async function deleteSession(id) {
+  await fetch(`${API}/sessions/${id}`, {
+    method: "DELETE", headers: authHeaders()
+  });
+  if (id === currentSession) { currentSession = null; clearChat(); }
+  loadSessions();
+}
+
+// ── Connections ───────────────────────────────────────────────────────────────
+async function loadConnections() {
+  try {
+    const res   = await fetch(`${API}/connections`, { headers: authHeaders() });
+    const conns = await res.json();
+    renderConnections(conns);
+  } catch (e) { /* silent */ }
+}
+
+function renderConnections(conns) {
+  const el = document.getElementById("connections-list");
+  if (!el) return;
+  if (!conns || conns.length === 0) {
+    el.innerHTML = `<p class="empty-hint">No saved connections</p>`; return;
+  }
+  el.innerHTML = conns.map(c => `
+    <div class="conn-row">
+      <div class="conn-row-info">
+        <div class="conn-row-name">${esc(c.nickname)}</div>
+        <div class="conn-row-meta">
+          ${esc(c.db_type)} &middot; ${esc(c.database_name || c.filepath || "")}
+        </div>
+      </div>
+      <button class="btn-sm-red"
+              onclick="reconnect(${c.id},'${esc(c.nickname)}')">
+        Connect
+      </button>
+    </div>`).join("");
+}
+
+// ── Schema explorer ───────────────────────────────────────────────────────────
 async function loadSchemaExplorer() {
   try {
-    const res   = await fetch(`${API}/schema/explorer`, { headers: authHeaders() });
-    const data  = await res.json();
+    const res  = await fetch(`${API}/schema/explorer`, { headers: authHeaders() });
+    const data = await res.json();
     if (!data.tables) return;
-    const panel = document.getElementById("schema-explorer");
-    panel.innerHTML = data.tables.map(t => `
-      <div class="explorer-table">
-        <div class="explorer-table-header" onclick="toggleTable('${t.name}', this)">
-          <span class="table-icon">⊞</span>
-          <span class="table-name">${escHtml(t.name)}</span>
-          <span class="table-col-count">${t.columns.length} cols</span>
-          <span class="expand-arrow">›</span>
+    const el = document.getElementById("schema-list");
+    if (!el) return;
+    el.innerHTML = data.tables.map(t => `
+      <div class="schema-table">
+        <div class="schema-table-header"
+             onclick="toggleSchema('${t.name}',this)">
+          <svg width="12" height="12" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               class="schema-arrow">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+          <span class="schema-table-name">${esc(t.name)}</span>
+          <span class="schema-col-count">${t.columns.length} cols</span>
         </div>
-        <div class="explorer-table-body hidden" id="table-${t.name}">
+        <div class="schema-table-cols hidden" id="scols-${t.name}">
           ${t.columns.map(c => `
-            <div class="explorer-col">
-              <span class="col-name">${escHtml(c.name)}</span>
-              <span class="col-type">${escHtml(c.type)}</span>
+            <div class="schema-col-row">
+              <span class="schema-col-name">${esc(c.name)}</span>
+              <span class="schema-col-type">${esc(c.type)}</span>
             </div>`).join("")}
-          <button class="sample-btn" onclick="loadSampleRows('${t.name}')">Show sample rows</button>
-          <div id="sample-${t.name}" class="sample-rows"></div>
+          <button class="schema-preview-btn"
+                  onclick="loadPreview('${t.name}')">
+            Preview rows
+          </button>
+          <div id="preview-${t.name}"></div>
         </div>
       </div>`).join("");
   } catch (e) { /* silent */ }
 }
 
-function toggleTable(name, header) {
-  const body  = document.getElementById(`table-${name}`);
-  const arrow = header.querySelector(".expand-arrow");
+function toggleSchema(name, header) {
+  const body  = document.getElementById(`scols-${name}`);
+  const arrow = header.querySelector(".schema-arrow");
+  if (!body) return;
   body.classList.toggle("hidden");
-  arrow.textContent = body.classList.contains("hidden") ? "›" : "⌄";
+  if (arrow) {
+    arrow.style.transform = body.classList.contains("hidden")
+      ? "rotate(0deg)" : "rotate(90deg)";
+  }
 }
 
-async function loadSampleRows(tableName) {
-  const container = document.getElementById(`sample-${tableName}`);
-  container.innerHTML = `<p class="empty-hint">Loading...</p>`;
+async function loadPreview(tableName) {
+  const el = document.getElementById(`preview-${tableName}`);
+  if (!el) return;
+  el.innerHTML = `<p class="empty-hint">Loading...</p>`;
   try {
-    const res  = await fetch(`${API}/schema/sample/${tableName}`, { headers: authHeaders() });
+    const res  = await fetch(
+      `${API}/schema/sample/${tableName}`, { headers: authHeaders() });
     const data = await res.json();
     if (data.columns && data.rows) {
-      const ths = data.columns.map(c => `<th>${escHtml(c)}</th>`).join("");
+      const ths = data.columns.map(c => `<th>${esc(c)}</th>`).join("");
       const trs = data.rows.map(r =>
-        `<tr>${r.map(v => `<td>${escHtml(v === null ? "NULL" : String(v))}</td>`).join("")}</tr>`
+        `<tr>${r.map(v =>
+          `<td>${esc(v === null ? "NULL" : String(v))}</td>`
+        ).join("")}</tr>`
       ).join("");
-      container.innerHTML = `
-        <div class="sample-table-wrap">
-          <table class="sample-table">
+      el.innerHTML = `
+        <div class="preview-table-wrap">
+          <table class="preview-table">
             <thead><tr>${ths}</tr></thead>
             <tbody>${trs}</tbody>
           </table>
         </div>`;
     }
-  } catch (e) { container.innerHTML = `<p class="empty-hint">Failed to load</p>`; }
+  } catch (e) {
+    el.innerHTML = `<p class="empty-hint">Failed to load</p>`;
+  }
 }
 
-// ─────────────────────────────────────────────
-// Query suggestions
-// ─────────────────────────────────────────────
+// ── Suggestions ───────────────────────────────────────────────────────────────
 async function loadSuggestions() {
   if (!isConnected) return;
   try {
     const res  = await fetch(`${API}/suggestions`, { headers: authHeaders() });
     const data = await res.json();
     if (data.suggestions) {
-      const chips = document.getElementById("suggestion-chips");
-      if (chips) {
-        chips.innerHTML = data.suggestions.map(q =>
-          `<button class="chip" onclick="fillAndSend('${escHtml(q).replace(/'/g, "\\'")}')">${escHtml(q)}</button>`
+      const el = document.getElementById("suggestion-chips");
+      if (el) {
+        el.innerHTML = data.suggestions.map(q =>
+          `<button class="chip"
+                   onclick="sendDirect('${esc(q).replace(/'/g,"\\'")}')">
+            ${esc(q)}
+          </button>`
         ).join("");
       }
     }
   } catch (e) { /* silent */ }
 }
 
-function fillAndSend(q) {
+function sendDirect(q) {
   document.getElementById("chat-input").value = q;
   sendQuestion();
 }
 
-// ─────────────────────────────────────────────
-// Ask question
-// ─────────────────────────────────────────────
+// ── Ask ───────────────────────────────────────────────────────────────────────
 function handleKey(e) {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault(); sendQuestion();
+  }
 }
 
 async function sendQuestion() {
@@ -201,399 +412,552 @@ async function sendQuestion() {
   const input    = document.getElementById("chat-input");
   const question = input.value.trim();
   if (!question) return;
-  if (!isConnected) { pushSystemMsg("⚠ Connect to a database first.", "warning"); return; }
+  if (!isConnected) {
+    toast("Connect to a database first.", "warning"); return;
+  }
 
   input.value = ""; input.style.height = "auto";
   isLoading   = true;
   document.getElementById("send-btn").disabled = true;
 
   removeWelcome();
-  pushUserBubble(question);
-  const loaderId = pushLoader();
+  pushUser(question);
+  const lid = pushLoader();
 
   try {
     const res  = await fetch(`${API}/ask`, {
-      method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ question })
+      method:  "POST",
+      headers: authHeaders(),
+      body:    JSON.stringify({
+        question,
+        session_id: currentSession
+      })
     });
     const data = await res.json();
-    removeLoader(loaderId);
-    if (res.ok && data.success) pushAIResponse(data);
-    else                         pushAIError(data);
-    loadHistory();
-  } catch (e) { removeLoader(loaderId); pushSystemMsg(`✗ ${e.message}`, "error"); }
+    removeLoader(lid);
+
+    if (res.status === 429) {
+      toast(data.error, "error");
+    } else if (res.ok && data.success) {
+      pushAI(data);
+      loadSessions();
+    } else {
+      pushError(data);
+    }
+  } catch (e) {
+    removeLoader(lid); toast(e.message, "error");
+  }
 
   isLoading = false;
   document.getElementById("send-btn").disabled = false;
   scrollBottom();
 }
 
-// ─────────────────────────────────────────────
-// Chat rendering
-// ─────────────────────────────────────────────
-function scrollBottom() { const c = document.getElementById("chat-messages"); c.scrollTop = c.scrollHeight; }
-function removeWelcome() { const w = document.getElementById("chat-welcome"); if (w) w.remove(); }
-
-function pushUserBubble(text) {
+// ── Chat rendering ────────────────────────────────────────────────────────────
+function scrollBottom() {
   const c = document.getElementById("chat-messages");
-  const d = document.createElement("div");
-  d.className = "msg-row user-row";
-  d.innerHTML = `<div class="bubble user-bubble"><span>${escHtml(text)}</span></div>`;
-  c.appendChild(d); scrollBottom();
+  if (c) c.scrollTop = c.scrollHeight;
 }
 
-function pushSystemMsg(html, type = "info") {
-  removeWelcome();
+function removeWelcome() {
+  const w = document.getElementById("chat-welcome");
+  if (w) w.remove();
+}
+
+function clearChat() {
   const c = document.getElementById("chat-messages");
-  const d = document.createElement("div");
-  d.className = "msg-row system-row";
-  d.innerHTML = `<div class="system-msg ${type}">${html}</div>`;
-  c.appendChild(d); scrollBottom();
+  if (c) c.innerHTML = `
+    <div class="chat-welcome" id="chat-welcome">
+      <div class="welcome-graphic">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83
+                   M16.95 16.95l2.83 2.83M1 12h4M19 12h4
+                   M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+        </svg>
+      </div>
+      <h2>What would you like to know?</h2>
+      <p>Ask anything about your data in plain English.</p>
+      <div class="suggestion-chips" id="suggestion-chips"></div>
+    </div>`;
+  if (isConnected) loadSuggestions();
+}
+
+function pushUser(text) {
+  const c   = document.getElementById("chat-messages");
+  const div = document.createElement("div");
+  div.className = "msg user-msg";
+  div.innerHTML = `<div class="msg-bubble user-bubble">${esc(text)}</div>`;
+  c.appendChild(div); scrollBottom();
 }
 
 function pushLoader() {
-  const c  = document.getElementById("chat-messages");
-  const id = "loader-" + Date.now();
-  const d  = document.createElement("div");
-  d.id = id; d.className = "msg-row ai-row";
-  d.innerHTML = `
-    <div class="ai-avatar">Q</div>
-    <div class="bubble ai-bubble loader-bubble">
-      <span class="dot-flashing"></span>
+  const c   = document.getElementById("chat-messages");
+  const id  = "ld-" + Date.now();
+  const div = document.createElement("div");
+  div.id        = id;
+  div.className = "msg ai-msg";
+  div.innerHTML = `
+    <div class="ai-icon">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="10"/>
+      </svg>
+    </div>
+    <div class="msg-bubble ai-bubble loader-bubble">
+      <div class="loader-dots">
+        <span></span><span></span><span></span>
+      </div>
     </div>`;
-  c.appendChild(d); scrollBottom();
+  c.appendChild(div); scrollBottom();
   return id;
 }
 
-function removeLoader(id) { const el = document.getElementById(id); if (el) el.remove(); }
+function removeLoader(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
 
-function pushAIResponse(data) {
+function pushAI(data, isReplay = false) {
   const c      = document.getElementById("chat-messages");
-  const d      = document.createElement("div");
-  d.className  = "msg-row ai-row";
-  const sqlId  = "sql-"   + Date.now();
-  const chartId = "chart-" + Date.now();
+  const div    = document.createElement("div");
+  div.className = "msg ai-msg";
 
-  // Table
+  const sqlId   = "sql-" + Date.now() + Math.random().toString(36).slice(2);
+  const chartId = "ch-"  + Date.now() + Math.random().toString(36).slice(2);
+  const tblId   = "tb-"  + Date.now() + Math.random().toString(36).slice(2);
+
+  // Table HTML
   let tableHtml = "";
   if (data.rows && data.rows.length > 0) {
-    const ths = data.columns.map(c => `<th>${escHtml(String(c))}</th>`).join("");
+    const ths = data.columns.map((c, i) =>
+      `<th class="sortable" onclick="sortCol('${tblId}',${i})">
+        ${esc(String(c))}
+        <span class="sort-icon">&#8597;</span>
+      </th>`
+    ).join("");
     const trs = data.rows.map(r =>
-      `<tr>${r.map(v => `<td>${escHtml(v === null ? "NULL" : String(v))}</td>`).join("")}</tr>`
+      `<tr>${r.map(v =>
+        `<td>${esc(v === null ? "NULL" : String(v))}</td>`
+      ).join("")}</tr>`
     ).join("");
     tableHtml = `
-      <div class="result-table-wrap">
-        <table class="result-table">
-          <thead><tr>${ths}</tr></thead>
-          <tbody>${trs}</tbody>
-        </table>
+      <div class="result-block">
+        <div class="result-toolbar">
+          <span class="result-count">
+            ${data.row_count} row${data.row_count !== 1 ? "s" : ""}
+          </span>
+          <div class="result-actions">
+            <button class="toolbar-btn"
+                    onclick="toggleFilter('${tblId}')">
+              Filter
+            </button>
+            <button class="toolbar-btn"
+                    onclick="exportCSV('${tblId}',
+                    ${JSON.stringify(data.columns)})">
+              Export CSV
+            </button>
+          </div>
+        </div>
+        <input type="text" class="filter-input hidden"
+               id="fi-${tblId}"
+               placeholder="Filter results..."
+               oninput="filterRows('${tblId}',this.value)"/>
+        <div class="table-scroll">
+          <table id="${tblId}" class="data-table">
+            <thead><tr>${ths}</tr></thead>
+            <tbody>${trs}</tbody>
+          </table>
+        </div>
       </div>`;
   } else {
-    tableHtml = `<p class="zero-rows">No rows returned.</p>`;
+    tableHtml = `<p class="no-rows">Query returned 0 rows.</p>`;
   }
 
-  // Chart toggle button
-  const hasChart  = data.chart_data && Object.keys(data.chart_data).length > 0;
-  const chartToggle = hasChart ? `
-    <button class="chart-toggle-btn" onclick="toggleChart('${chartId}', this)">📊 Show Chart</button>
-    <div id="${chartId}" class="chart-container hidden">
-      <canvas id="canvas-${chartId}"></canvas>
+  // Data summary
+  let summaryHtml = "";
+  if (data.data_summary && Object.keys(data.data_summary).length > 0) {
+    summaryHtml = `
+      <div class="summary-strip">
+        ${Object.entries(data.data_summary).map(([col, s]) => `
+          <div class="summary-item">
+            <div class="summary-col-name">${esc(col)}</div>
+            <div class="summary-nums">
+              <span>MIN <b>${s.min}</b></span>
+              <span>MAX <b>${s.max}</b></span>
+              <span>AVG <b>${s.avg}</b></span>
+            </div>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  // Chart
+  const hasChart = data.chart_data &&
+    Object.keys(data.chart_data).length > 0;
+  const chartHtml = hasChart ? `
+    <div class="chart-block">
+      <div class="chart-toolbar">
+        <span class="chart-label">Visualization</span>
+        <div class="chart-type-btns">
+          <button class="chart-type-btn active"
+                  onclick="switchChart('${chartId}','bar',this)">
+            Bar
+          </button>
+          <button class="chart-type-btn"
+                  onclick="switchChart('${chartId}','line',this)">
+            Line
+          </button>
+          <button class="chart-type-btn"
+                  onclick="switchChart('${chartId}','pie',this)">
+            Pie
+          </button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="${chartId}"></canvas>
+      </div>
     </div>` : "";
 
-  // Save + Share buttons
-  const actionBtns = `
-    <div class="response-actions">
-      <button class="action-btn" onclick="openSaveModal('${escHtml(data.question).replace(/'/g, "\\'")}', '${escHtml(data.sql).replace(/'/g, "\\'")}')">💾 Save</button>
-      <button class="action-btn" onclick="shareQuery('${escHtml(data.question).replace(/'/g, "\\'")}', '${escHtml(data.sql).replace(/'/g, "\\'")}', ${JSON.stringify(data.columns)}, ${JSON.stringify(data.rows)}, ${data.row_count})">🔗 Share</button>
-      <button class="action-btn thumb-up"   onclick="submitFeedback(1, '${escHtml(data.question).replace(/'/g, "\\'")}', '${escHtml(data.sql).replace(/'/g, "\\'")}', this)">👍</button>
-      <button class="action-btn thumb-down" onclick="submitFeedback(0, '${escHtml(data.question).replace(/'/g, "\\'")}', '${escHtml(data.sql).replace(/'/g, "\\'")}', this)">👎</button>
-    </div>`;
-
-  d.innerHTML = `
-    <div class="ai-avatar">Q</div>
-    <div class="bubble ai-bubble">
-      <div class="sql-card">
-        <div class="sql-card-header">
-          <span class="sql-tag">SQL</span>
-          <button class="copy-btn" onclick="copyText('${sqlId}', this)">Copy</button>
+  // Insights
+  let insightsHtml = "";
+  if (data.insights && data.insights.length > 0) {
+    insightsHtml = `
+      <div class="insights-block">
+        <div class="insights-label">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Insights
         </div>
-        <code id="${sqlId}" class="sql-body">${escHtml(data.sql)}</code>
+        <ul class="insights-list">
+          ${data.insights.map(i =>
+            `<li>${esc(i)}</li>`).join("")}
+        </ul>
+      </div>`;
+  }
+
+  // Anomalies
+  let anomalyHtml = "";
+  if (data.anomalies && data.anomalies.length > 0) {
+    anomalyHtml = `
+      <div class="anomaly-block">
+        <div class="anomaly-label">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94
+                     a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Anomalies Detected
+        </div>
+        ${data.anomalies.map(a => `
+          <div class="anomaly-item ${a.severity}">
+            ${esc(a.message)}
+          </div>`).join("")}
+      </div>`;
+  }
+
+  // Forecast
+  let forecastHtml = "";
+  if (data.forecast && data.forecast.available) {
+    const f = data.forecast;
+    forecastHtml = `
+      <div class="forecast-block">
+        <div class="forecast-label">
+          <svg width="14" height="14" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          Forecast — ${f.forecast_label}
+        </div>
+        <p class="forecast-msg">${esc(f.message)}</p>
+        <div class="forecast-vals">
+          ${f.forecast.map((v, i) =>
+            `<span class="forecast-val">
+              Period ${i + 1}: <b>${v.toLocaleString()}</b>
+            </span>`).join("")}
+        </div>
+      </div>`;
+  }
+
+  // Save button
+  const saveBtn = !isReplay ? `
+    <button class="action-link"
+            onclick="openSave('${esc(data.question || "").replace(/'/g,"\\'")}',
+                              '${esc(data.sql || "").replace(/'/g,"\\'")}')">
+      Save query
+    </button>` : "";
+
+  div.innerHTML = `
+    <div class="ai-icon">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="10"/>
+      </svg>
+    </div>
+    <div class="msg-bubble ai-bubble">
+
+      <div class="sql-block">
+        <div class="sql-header">
+          <span class="sql-label">SQL</span>
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${data.corrected
+              ? `<span class="badge badge-warn">Auto-corrected</span>`
+              : ""}
+            ${data.response_ms
+              ? `<span class="badge badge-dim">${data.response_ms}ms</span>`
+              : ""}
+            <button class="copy-link"
+                    onclick="copyEl('${sqlId}',this)">Copy</button>
+          </div>
+        </div>
+        <code id="${sqlId}" class="sql-code">${esc(data.sql || "")}</code>
       </div>
-      <p class="explain-text">${escHtml(data.explanation)}</p>
-      <div class="result-meta-row">
-        <span class="tag tag-success">✓ ${data.row_count} row${data.row_count !== 1 ? "s" : ""}</span>
-        ${data.corrected ? `<span class="tag tag-warn">⚡ Auto-corrected</span>` : ""}
-      </div>
+
+      <p class="explain-text">${esc(data.explanation || "")}</p>
+
       ${tableHtml}
-      ${chartToggle}
-      ${actionBtns}
+      ${summaryHtml}
+      ${chartHtml}
+      ${insightsHtml}
+      ${anomalyHtml}
+      ${forecastHtml}
+
+      ${!isReplay ? `<div class="msg-footer">${saveBtn}</div>` : ""}
+
     </div>`;
 
-  c.appendChild(d);
+  c.appendChild(div);
 
-  // Render chart if available
   if (hasChart) {
-    setTimeout(() => renderChart(chartId, data.chart_data), 100);
+    setTimeout(() => renderChart(chartId, data.chart_data), 80);
   }
 
   scrollBottom();
 }
 
-function pushAIError(data) {
-  const c = document.getElementById("chat-messages");
-  const d = document.createElement("div");
-  d.className = "msg-row ai-row";
+function pushError(data) {
+  const c   = document.getElementById("chat-messages");
+  const div = document.createElement("div");
+  div.className = "msg ai-msg";
 
-  const sqlSection = data.sql ? `
-    <div class="sql-card">
-      <div class="sql-card-header"><span class="sql-tag">SQL</span></div>
-      <code class="sql-body">${escHtml(data.sql)}</code>
+  const sqlHtml = data.sql ? `
+    <div class="sql-block">
+      <div class="sql-header"><span class="sql-label">SQL</span></div>
+      <code class="sql-code">${esc(data.sql)}</code>
     </div>` : "";
 
   const note = data.blocked
-    ? `<p class="explain-text">🛡 Blocked by safety guardrail.</p>`
+    ? `<p class="explain-text">Query blocked by safety guardrail.</p>`
     : data.corrected_attempted
-    ? `<p class="explain-text">⚡ Auto-correction attempted but failed.</p>`
+    ? `<p class="explain-text">Auto-correction attempted but failed.</p>`
     : "";
 
-  d.innerHTML = `
-    <div class="ai-avatar">Q</div>
-    <div class="bubble ai-bubble">
-      ${sqlSection}${note}
-      <div class="result-meta-row"><span class="tag tag-error">✗ Failed</span></div>
-      <div class="error-box">${escHtml(data.error || "Unknown error")}</div>
+  div.innerHTML = `
+    <div class="ai-icon">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="12" cy="12" r="10"/>
+      </svg>
+    </div>
+    <div class="msg-bubble ai-bubble">
+      ${sqlHtml}
+      ${note}
+      <div class="error-msg">${esc(data.error || "Unknown error")}</div>
     </div>`;
-  c.appendChild(d); scrollBottom();
+
+  c.appendChild(div); scrollBottom();
 }
 
-// ─────────────────────────────────────────────
-// Chart rendering
-// ─────────────────────────────────────────────
-function toggleChart(chartId, btn) {
-  const container = document.getElementById(chartId);
-  container.classList.toggle("hidden");
-  btn.textContent = container.classList.contains("hidden") ? "📊 Show Chart" : "📊 Hide Chart";
+// ── Table helpers ─────────────────────────────────────────────────────────────
+let _sortState = {};
+
+function sortCol(tblId, colIdx) {
+  const table = document.getElementById(tblId);
+  if (!table) return;
+  const tbody = table.querySelector("tbody");
+  const rows  = Array.from(tbody.querySelectorAll("tr"));
+  const key   = `${tblId}-${colIdx}`;
+  const dir   = (_sortState[key] === 1) ? -1 : 1;
+  _sortState[key] = dir;
+
+  rows.sort((a, b) => {
+    const av = a.cells[colIdx]?.textContent || "";
+    const bv = b.cells[colIdx]?.textContent || "";
+    const an = parseFloat(av), bn = parseFloat(bv);
+    if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+    return av.localeCompare(bv) * dir;
+  });
+  rows.forEach(r => tbody.appendChild(r));
 }
 
+function toggleFilter(tblId) {
+  const el = document.getElementById(`fi-${tblId}`);
+  if (el) el.classList.toggle("hidden");
+}
+
+function filterRows(tblId, val) {
+  const table = document.getElementById(tblId);
+  if (!table) return;
+  const q = val.toLowerCase();
+  table.querySelectorAll("tbody tr").forEach(row => {
+    row.style.display =
+      row.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+function exportCSV(tblId, columns) {
+  const table = document.getElementById(tblId);
+  if (!table) return;
+  let csv = columns.join(",") + "\n";
+  table.querySelectorAll("tbody tr").forEach(row => {
+    const cells = Array.from(row.cells).map(
+      c => `"${c.textContent.replace(/"/g,'""')}"`);
+    csv += cells.join(",") + "\n";
+  });
+  const a    = document.createElement("a");
+  a.href     = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "querymind_export.csv";
+  a.click();
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────────
 function renderChart(chartId, chartData) {
-  const canvas = document.getElementById(`canvas-${chartId}`);
+  const canvas = document.getElementById(chartId);
   if (!canvas || !window.Chart) return;
-  if (chartInstances[chartId]) {
-    chartInstances[chartId].destroy();
-  }
-  Chart.defaults.color = "#7a8aaa";
-  Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
-  chartInstances[chartId] = new Chart(canvas, chartData);
+  if (chartInstances[chartId]) chartInstances[chartId].destroy();
+  Chart.defaults.color       = "#6b7280";
+  Chart.defaults.borderColor = "rgba(0,0,0,0.06)";
+  chartInstances[chartId]    = new Chart(canvas, chartData);
 }
 
-// ─────────────────────────────────────────────
-// History
-// ─────────────────────────────────────────────
-async function loadHistory() {
+function switchChart(chartId, type, btn) {
+  const inst = chartInstances[chartId];
+  if (!inst) return;
+  inst.config.type = type;
+  inst.update();
+  btn.closest(".chart-type-btns")
+     .querySelectorAll(".chart-type-btn")
+     .forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+}
+
+// ── Profile dropdown ──────────────────────────────────────────────────────────
+function toggleProfile() {
+  const dd = document.getElementById("profile-dropdown");
+  if (dd) dd.classList.toggle("visible");
+}
+
+async function loadProfileData() {
   try {
-    const res  = await fetch(`${API}/history`, { headers: { "Authorization": `Bearer ${getToken()}` } });
+    const res  = await fetch(`${API}/profile`, { headers: authHeaders() });
     const data = await res.json();
-    renderHistory(data);
+    const u    = data.user;
+    const s    = data.stats || {};
+
+    const nameEl  = document.getElementById("pd-name");
+    const emailEl = document.getElementById("pd-email");
+    const statsEl = document.getElementById("pd-stats");
+
+    if (nameEl)  nameEl.textContent  = u?.name  || "";
+    if (emailEl) emailEl.textContent = u?.email || "";
+    if (statsEl) {
+      statsEl.innerHTML = `
+        <div class="pd-stat">
+          <span class="pd-stat-val">${s.total || 0}</span>
+          <span class="pd-stat-label">Queries</span>
+        </div>
+        <div class="pd-stat">
+          <span class="pd-stat-val">${s.success_rate || 0}%</span>
+          <span class="pd-stat-label">Success rate</span>
+        </div>
+        <div class="pd-stat">
+          <span class="pd-stat-val">${data.today_usage || 0}</span>
+          <span class="pd-stat-label">Today</span>
+        </div>`;
+    }
   } catch (e) { /* silent */ }
 }
 
-function renderHistory(entries) {
-  const list = document.getElementById("history-list");
-  if (!entries || entries.length === 0) { list.innerHTML = `<p class="empty-hint">No queries yet</p>`; return; }
-  list.innerHTML = entries.map(e => `
-    <div class="history-item ${e.success ? "" : "failed"}"
-         onclick="fillInput('${escHtml(e.question).replace(/'/g, "\\'")}')">
-      <div class="h-q">${escHtml(e.question)}</div>
-      <div class="h-meta">${e.timestamp ? e.timestamp.split(" ")[1] : ""} · ${e.success ? e.row_count + " rows" : "failed"}</div>
-    </div>`).join("");
-}
+// Close dropdown when clicking outside
+document.addEventListener("click", e => {
+  const dd  = document.getElementById("profile-dropdown");
+  const btn = document.getElementById("profile-btn");
+  if (dd && btn && !dd.contains(e.target) && !btn.contains(e.target)) {
+    dd.classList.remove("visible");
+  }
+});
 
-async function clearHistory() {
-  await fetch(`${API}/history/clear`, { method: "POST", headers: authHeaders() });
-  loadHistory();
-}
-
-function fillInput(q) {
-  document.getElementById("chat-input").value = q;
-  document.getElementById("chat-input").focus();
-}
-
-// ─────────────────────────────────────────────
-// Save query modal
-// ─────────────────────────────────────────────
+// ── Save query ────────────────────────────────────────────────────────────────
 let _pendingSave = {};
 
-function openSaveModal(question, sql) {
+function openSave(question, sql) {
   _pendingSave = { question, sql };
   document.getElementById("save-modal").classList.add("active");
-  document.getElementById("save-name").value       = question.slice(0, 40);
-  document.getElementById("save-collection").value = "General";
+  document.getElementById("save-q-name").value       = question.slice(0, 40);
+  document.getElementById("save-q-collection").value = "General";
 }
 
-function closeSaveModal() {
+function closeSave() {
   document.getElementById("save-modal").classList.remove("active");
 }
 
 async function confirmSave() {
-  const name       = document.getElementById("save-name").value.trim();
-  const collection = document.getElementById("save-collection").value.trim() || "General";
+  const name = document.getElementById("save-q-name").value.trim();
+  const coll = document.getElementById("save-q-collection").value.trim() || "General";
   if (!name) return;
-
   try {
     const res = await fetch(`${API}/saved/save`, {
       method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ name, collection, question: _pendingSave.question, sql: _pendingSave.sql })
+      body: JSON.stringify({
+        name, collection: coll,
+        question: _pendingSave.question,
+        sql:      _pendingSave.sql
+      })
     });
-    if (res.ok) {
-      closeSaveModal();
-      pushSystemMsg(`💾 Saved as <strong>${name}</strong>`, "success");
-      loadSavedQueries();
-    }
+    if (res.ok) { closeSave(); toast(`Saved: ${name}`, "success"); }
   } catch (e) { /* silent */ }
 }
 
-async function loadSavedQueries() {
-  try {
-    const res  = await fetch(`${API}/saved/list`, { headers: authHeaders() });
-    const data = await res.json();
-    renderSavedQueries(data);
-  } catch (e) { /* silent */ }
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = "info") {
+  const el  = document.createElement("div");
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById("toasts").appendChild(el);
+  setTimeout(() => el.classList.add("show"), 10);
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, 3500);
 }
 
-function renderSavedQueries(entries) {
-  const list = document.getElementById("saved-queries-list");
-  if (!list) return;
-  if (!entries || entries.length === 0) { list.innerHTML = `<p class="empty-hint">No saved queries</p>`; return; }
-
-  const grouped = {};
-  entries.forEach(e => {
-    if (!grouped[e.collection]) grouped[e.collection] = [];
-    grouped[e.collection].push(e);
-  });
-
-  list.innerHTML = Object.entries(grouped).map(([col, items]) => `
-    <div class="saved-collection">
-      <div class="collection-label">${escHtml(col)}</div>
-      ${items.map(item => `
-        <div class="saved-item">
-          <div class="saved-item-name" onclick="fillInput('${escHtml(item.question).replace(/'/g, "\\'")}')">
-            ${escHtml(item.name)}
-          </div>
-          <button class="del-saved-btn" onclick="deleteSaved(${item.id})">✕</button>
-        </div>`).join("")}
-    </div>`).join("");
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-async function deleteSaved(id) {
-  await fetch(`${API}/saved/${id}`, { method: "DELETE", headers: authHeaders() });
-  loadSavedQueries();
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : "";
 }
 
-// ─────────────────────────────────────────────
-// Share query
-// ─────────────────────────────────────────────
-async function shareQuery(question, sql, columns, rows, row_count) {
-  try {
-    const res  = await fetch(`${API}/share/create`, {
-      method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ question, sql, columns, rows, row_count })
-    });
-    const data = await res.json();
-    if (data.share_url) {
-      await navigator.clipboard.writeText(data.share_url);
-      pushSystemMsg(`🔗 Share link copied to clipboard!`, "success");
-    }
-  } catch (e) { pushSystemMsg("Failed to create share link", "error"); }
-}
-
-// ─────────────────────────────────────────────
-// Feedback
-// ─────────────────────────────────────────────
-async function submitFeedback(rating, question, sql, btn) {
-  try {
-    await fetch(`${API}/feedback`, {
-      method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ rating, question, sql })
-    });
-    btn.style.opacity = "0.4";
-    btn.disabled      = true;
-    loadFeedbackStats();
-  } catch (e) { /* silent */ }
-}
-
-async function loadFeedbackStats() {
-  try {
-    const res  = await fetch(`${API}/feedback/stats`, { headers: authHeaders() });
-    const data = await res.json();
-    const el   = document.getElementById("feedback-stats");
-    if (el && data.total > 0) {
-      el.textContent = `${data.positive_rate}% positive · ${data.total} rated`;
-    }
-  } catch (e) { /* silent */ }
-}
-
-// ─────────────────────────────────────────────
-// Dark / Light mode
-// ─────────────────────────────────────────────
-function toggleTheme() {
-  isDarkMode = !isDarkMode;
-  document.body.classList.toggle("light-mode", !isDarkMode);
-  const btn = document.getElementById("theme-toggle");
-  btn.textContent = isDarkMode ? "☀️" : "🌙";
-  localStorage.setItem("qm_theme", isDarkMode ? "dark" : "light");
-}
-
-function initTheme() {
-  const saved = localStorage.getItem("qm_theme");
-  if (saved === "light") {
-    isDarkMode = false;
-    document.body.classList.add("light-mode");
-    const btn = document.getElementById("theme-toggle");
-    if (btn) btn.textContent = "🌙";
-  }
-}
-
-// ─────────────────────────────────────────────
-// Sidebar panel switching
-// ─────────────────────────────────────────────
-function switchSidebarPanel(panel) {
-  document.querySelectorAll(".sidebar-panel").forEach(p =>
-    p.classList.toggle("hidden", p.id !== `panel-${panel}`)
-  );
-  document.querySelectorAll(".sidebar-nav-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.panel === panel)
-  );
-}
-
-// ─────────────────────────────────────────────
-// Utilities
-// ─────────────────────────────────────────────
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-async function copyText(id, btn) {
+async function copyEl(id, btn) {
   const text = document.getElementById(id)?.textContent || "";
   await navigator.clipboard.writeText(text);
-  btn.textContent = "Copied!";
+  btn.textContent = "Copied";
   setTimeout(() => btn.textContent = "Copy", 2000);
 }
 
-// ─────────────────────────────────────────────
-// Init
-// ─────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-  initTheme();
-
   const ta = document.getElementById("chat-input");
   if (ta) {
     ta.addEventListener("input", () => {
       ta.style.height = "auto";
-      ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
+      ta.style.height = Math.min(ta.scrollHeight, 130) + "px";
     });
   }
-
   initAuth();
 });
